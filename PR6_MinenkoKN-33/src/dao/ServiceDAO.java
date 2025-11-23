@@ -1,167 +1,121 @@
 package dao;
 
 import entity.Service;
-import java.io.IOException;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
-import util.JsonFileHandler;
-import util.SimpleJsonParser;
-import util.SimpleJsonParser.JsonObject;
+import util.DatabaseCfg;
+import util.DatabaseInit;
 
 public class ServiceDAO {
-    /**
-     * Шлях до JSON файлу з даними послуг.
-     */
-    private static final String FILE_PATH = "data/services.json";
-    
-    /**
-     * Об'єкт для роботи з JSON файлами.
-     */
-    private JsonFileHandler fileHandler;
 
-    /**
-     * Конструктор.
-     * Ініціалізує об'єкт для роботи з файлами.
-     */
-    public ServiceDAO() {
-        this.fileHandler = new JsonFileHandler();
-    }
+  // Видалено FILE_PATH та fileHandler
 
-    /**
-     * Створює нову послугу та зберігає її у файл.
-     * 
-     * @param service послуга для створення
-     * @return true, якщо послуга успішно створена, false - інакше
-     * @throws IOException якщо виникла помилка при роботі з файлом
-     */
-    public boolean create(Service service) throws IOException {
-        List<Service> services = findAll();
-        service.setId(generateId(services));
-        services.add(service);
-        return saveAll(services);
-    }
+  public ServiceDAO() {
+    DatabaseInit.InitS();
+  }
 
-    /**
-     * Знаходить послугу за ідентифікатором.
-     * 
-     * @param id ідентифікатор послуги
-     * @return послуга з вказаним ідентифікатором або null, якщо не знайдено
-     * @throws IOException якщо виникла помилка при роботі з файлом
-     */
-    public Service findById(int id) throws IOException {
-        List<Service> services = findAll();
-        for (Service service : services) {
-            if (service.getId() == id) {
-                return service;
-            }
+  // Приватний helper-метод для створення об'єкта Service з результату запиту
+  private Service extractServiceFromResultSet(ResultSet rs) throws SQLException {
+    Integer id = rs.getInt("id");
+    String name = rs.getString("name");
+    String description = rs.getString("description");
+    return new Service(id, name, description);
+  }
+
+  // --- C.R.U.D. Операції ---
+
+  public boolean create(Service service) {
+    String sql = "INSERT INTO services (name, description) VALUES (?, ?)";
+    try (Connection conn = DatabaseCfg.getConnection();
+        PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+
+      ps.setString(1, service.getName());
+      ps.setString(2, service.getDescription());
+
+      int affectedRows = ps.executeUpdate();
+
+      if (affectedRows > 0) {
+        try (ResultSet rs = ps.getGeneratedKeys()) {
+          if (rs.next()) {
+            service.setId(rs.getInt(1)); // Встановлення згенерованого ID
+          }
         }
-        return null;
-    }
-
-    /**
-     * Отримує всі послуги з файлу.
-     * 
-     * @return список всіх послуг
-     * @throws IOException якщо виникла помилка при роботі з файлом
-     */
-    public List<Service> findAll() throws IOException {
-        List<Service> services = new ArrayList<>();
-        
-        if (!fileHandler.fileExists(FILE_PATH)) {
-            return services;
-        }
-
-        try {
-            String content = fileHandler.readFile(FILE_PATH);
-            List<JsonObject> jsonArray = SimpleJsonParser.parseArray(content);
-            
-            for (JsonObject jsonService : jsonArray) {
-                Service service = new Service();
-                Object idObj = jsonService.get("id");
-                if (idObj instanceof Long) {
-                    service.setId(((Long) idObj).intValue());
-                } else if (idObj instanceof Integer) {
-                    service.setId((Integer) idObj);
-                }
-                service.setName((String) jsonService.get("name"));
-                service.setDescription((String) jsonService.get("description"));
-                services.add(service);
-            }
-        } catch (Exception e) {
-            throw new IOException("Помилка парсингу JSON файлу", e);
-        }
-        
-        return services;
-    }
-
-    /**
-     * Оновлює дані послуги у файлі.
-     * 
-     * @param service послуга з оновленими даними
-     * @return true, якщо послуга успішно оновлена, false - інакше
-     * @throws IOException якщо виникла помилка при роботі з файлом
-     */
-    public boolean update(Service service) throws IOException {
-        List<Service> services = findAll();
-        for (int i = 0; i < services.size(); i++) {
-            if (services.get(i).getId() == service.getId()) {
-                services.set(i, service);
-                return saveAll(services);
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Видаляє послугу за ідентифікатором.
-     * 
-     * @param id ідентифікатор послуги для видалення
-     * @return true, якщо послуга успішно видалена, false - інакше
-     * @throws IOException якщо виникла помилка при роботі з файлом
-     */
-    public boolean delete(int id) throws IOException {
-        List<Service> services = findAll();
-        boolean removed = services.removeIf(service -> service.getId() == id);
-        if (removed) {
-            return saveAll(services);
-        }
-        return false;
-    }
-
-    /**
-     * Зберігає список послуг у JSON файл.
-     * 
-     * @param services список послуг для збереження
-     * @return true, якщо дані успішно збережені
-     * @throws IOException якщо виникла помилка при записі файлу
-     */
-    private boolean saveAll(List<Service> services) throws IOException {
-        List<JsonObject> jsonArray = new ArrayList<>();
-        
-        for (Service service : services) {
-            JsonObject jsonService = new JsonObject();
-            jsonService.put("id", (long) service.getId());
-            jsonService.put("name", service.getName());
-            jsonService.put("description", service.getDescription());
-            jsonArray.add(jsonService);
-        }
-        
-        fileHandler.writeFile(FILE_PATH, SimpleJsonParser.arrayToJsonString(jsonArray));
         return true;
-    }
+      }
+      return false;
 
-    /**
-     * Генерує новий унікальний ідентифікатор для послуги.
-     * 
-     * @param services список існуючих послуг
-     * @return новий унікальний ідентифікатор
-     */
-    private int generateId(List<Service> services) {
-        if (services.isEmpty()) {
-            return 1;
+    } catch (SQLException e) {
+      throw new RuntimeException("Помилка створення послуги: " + e.getMessage(), e);
+    }
+  }
+
+  public Service findById(int id) {
+    String sql = "SELECT id, name, description FROM services WHERE id = ?";
+    try (Connection conn = DatabaseCfg.getConnection();
+        PreparedStatement ps = conn.prepareStatement(sql)) {
+
+      ps.setInt(1, id);
+      try (ResultSet rs = ps.executeQuery()) {
+        if (rs.next()) {
+          return extractServiceFromResultSet(rs);
         }
-        int maxId = services.stream().mapToInt(Service::getId).max().orElse(0);
-        return maxId + 1;
-    }
-}
+      }
+      return null;
 
+    } catch (SQLException e) {
+      throw new RuntimeException("Помилка пошуку послуги за ID: " + e.getMessage(), e);
+    }
+  }
+
+  public List<Service> findAll() {
+    List<Service> services = new ArrayList<>();
+    String sqlQuery = "SELECT id, name, description FROM services";
+
+    try (Connection conn = DatabaseCfg.getConnection();
+        Statement stmt = conn.createStatement();
+        ResultSet rs = stmt.executeQuery(sqlQuery)) {
+
+      while (rs.next()) {
+        services.add(extractServiceFromResultSet(rs));
+      }
+
+    } catch (SQLException e) {
+      throw new RuntimeException("Помилка отримання всіх послуг: " + e.getMessage(), e);
+    }
+
+    return services;
+  }
+
+  public boolean update(Service service) {
+    String sql = "UPDATE services SET name = ?, description = ? WHERE id = ?";
+    try (Connection conn = DatabaseCfg.getConnection();
+        PreparedStatement ps = conn.prepareStatement(sql)) {
+
+      ps.setString(1, service.getName());
+      ps.setString(2, service.getDescription());
+      ps.setInt(3, service.getId());
+
+      return ps.executeUpdate() > 0;
+
+    } catch (SQLException e) {
+      throw new RuntimeException("Помилка оновлення послуги: " + e.getMessage(), e);
+    }
+  }
+
+  public boolean delete(int id) {
+    String sql = "DELETE FROM services WHERE id = ?";
+    try (Connection conn = DatabaseCfg.getConnection();
+        PreparedStatement ps = conn.prepareStatement(sql)) {
+      ps.setInt(1, id);
+      return ps.executeUpdate() > 0;
+    } catch (SQLException e) {
+      throw new RuntimeException("Помилка видалення послуги: " + e.getMessage(), e);
+    }
+  }
+
+}

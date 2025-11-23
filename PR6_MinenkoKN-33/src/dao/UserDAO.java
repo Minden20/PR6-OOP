@@ -1,186 +1,183 @@
 package dao;
 
 import entity.User;
-import java.io.IOException;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
-import util.JsonFileHandler;
-import util.SimpleJsonParser;
-import util.SimpleJsonParser.JsonObject;
+import util.DatabaseCfg;
+import util.DatabaseInit;
 
+/**
+ * Клас для доступу до даних користувачів, використовує H2 базу даних через JDBC.
+ */
 public class UserDAO {
-    /**
-     * Шлях до JSON файлу з даними користувачів.
-     */
-    private static final String FILE_PATH = "data/users.json";
-    
-    /**
-     * Об'єкт для роботи з JSON файлами.
-     */
-    private JsonFileHandler fileHandler;
 
-    /**
-     * Конструктор.
-     * Ініціалізує об'єкт для роботи з файлами.
-     */
-    public UserDAO() {
-        this.fileHandler = new JsonFileHandler();
-    }
+  // Видаляємо FILE_PATH та fileHandler, оскільки ми використовуємо DB
 
-    /**
-     * Створює нового користувача та зберігає його у файл.
-     * 
-     * @param user користувач для створення
-     * @return true, якщо користувач успішно створений, false - інакше
-     * @throws IOException якщо виникла помилка при роботі з файлом
-     */
-    public boolean create(User user) throws IOException {
-        List<User> users = findAll();
-        user.setId(generateId(users));
-        users.add(user);
-        return saveAll(users);
-    }
+  /**
+   * Конструктор. Ініціалізує базу даних.
+   */
+  public UserDAO() {
+    // Припускаємо, що цей метод створює таблицю, якщо вона не існує
+    DatabaseInit.Init();
+  }
 
-    /**
-     * Знаходить користувача за ідентифікатором.
-     * 
-     * @param id ідентифікатор користувача
-     * @return користувач з вказаним ідентифікатором або null, якщо не знайдено
-     * @throws IOException якщо виникла помилка при роботі з файлом
-     */
-    public User findById(int id) throws IOException {
-        List<User> users = findAll();
-        for (User user : users) {
-            if (user.getId() == id) {
-                return user;
-            }
+  // Helper метод для конвертації ResultSet у об'єкт User
+  private User extractUserFromResultSet(ResultSet rs) throws SQLException {
+    Integer id = rs.getInt("id");
+    String name = rs.getString("name");
+    String email = rs.getString("email");
+    String hashedPassword = rs.getString("hashedPassword");
+    return new User(id, name, email, hashedPassword);
+  }
+
+  /**
+   * Створює нового користувача та зберігає його у базу даних.
+   *
+   * @param user користувач для створення
+   * @return true, якщо користувач успішно створений, false - інакше
+   */
+  public boolean create(User user) {
+    String sql = "INSERT INTO users (name, email, hashedPassword) VALUES (?, ?, ?)";
+    try (Connection conn = DatabaseCfg.getConnection();
+        PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+
+      ps.setString(1, user.getName());
+      ps.setString(2, user.getEmail());
+      ps.setString(3, user.getHashedPassword());
+
+      int affectedRows = ps.executeUpdate();
+
+      if (affectedRows > 0) {
+        try (ResultSet rs = ps.getGeneratedKeys()) {
+          if (rs.next()) {
+            user.setId(rs.getInt(1));
+          }
         }
-        return null;
-    }
-
-    /**
-     * Знаходить користувача за email адресою.
-     * 
-     * @param email email адреса користувача
-     * @return користувач з вказаним email або null, якщо не знайдено
-     * @throws IOException якщо виникла помилка при роботі з файлом
-     */
-    public User findByEmail(String email) throws IOException {
-        List<User> users = findAll();
-        for (User user : users) {
-            if (user.getEmail().equals(email)) {
-                return user;
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Отримує всіх користувачів з файлу.
-     * 
-     * @return список всіх користувачів
-     * @throws IOException якщо виникла помилка при роботі з файлом
-     */
-    public List<User> findAll() throws IOException {
-        List<User> users = new ArrayList<>();
-        
-        if (!fileHandler.fileExists(FILE_PATH)) {
-            return users;
-        }
-
-        try {
-            String content = fileHandler.readFile(FILE_PATH);
-            List<JsonObject> jsonArray = SimpleJsonParser.parseArray(content);
-            
-            for (JsonObject jsonUser : jsonArray) {
-                User user = new User();
-                Object idObj = jsonUser.get("id");
-                if (idObj instanceof Long) {
-                    user.setId(((Long) idObj).intValue());
-                } else if (idObj instanceof Integer) {
-                    user.setId((Integer) idObj);
-                }
-                user.setName((String) jsonUser.get("name"));
-                user.setEmail((String) jsonUser.get("email"));
-                user.setHashedPassword((String) jsonUser.get("hashedPassword"));
-                users.add(user);
-            }
-        } catch (Exception e) {
-            throw new IOException("Помилка парсингу JSON файлу", e);
-        }
-        
-        return users;
-    }
-
-    /**
-     * Оновлює дані користувача у файлі.
-     * 
-     * @param user користувач з оновленими даними
-     * @return true, якщо користувач успішно оновлений, false - інакше
-     * @throws IOException якщо виникла помилка при роботі з файлом
-     */
-    public boolean update(User user) throws IOException {
-        List<User> users = findAll();
-        for (int i = 0; i < users.size(); i++) {
-            if (users.get(i).getId() == user.getId()) {
-                users.set(i, user);
-                return saveAll(users);
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Видаляє користувача за ідентифікатором.
-     * 
-     * @param id ідентифікатор користувача для видалення
-     * @return true, якщо користувач успішно видалений, false - інакше
-     * @throws IOException якщо виникла помилка при роботі з файлом
-     */
-    public boolean delete(int id) throws IOException {
-        List<User> users = findAll();
-        boolean removed = users.removeIf(user -> user.getId() == id);
-        if (removed) {
-            return saveAll(users);
-        }
-        return false;
-    }
-
-    /**
-     * Зберігає список користувачів у JSON файл.
-     * 
-     * @param users список користувачів для збереження
-     * @return true, якщо дані успішно збережені
-     * @throws IOException якщо виникла помилка при записі файлу
-     */
-    private boolean saveAll(List<User> users) throws IOException {
-        List<JsonObject> jsonArray = new ArrayList<>();
-        
-        for (User user : users) {
-            JsonObject jsonUser = new JsonObject();
-            jsonUser.put("id", (long) user.getId());
-            jsonUser.put("name", user.getName());
-            jsonUser.put("email", user.getEmail());
-            jsonUser.put("hashedPassword", user.getHashedPassword());
-            jsonArray.add(jsonUser);
-        }
-        
-        fileHandler.writeFile(FILE_PATH, SimpleJsonParser.arrayToJsonString(jsonArray));
         return true;
-    }
+      }
+      return false;
 
-    /**
-     * Генерує новий унікальний ідентифікатор для користувача.
-     * 
-     * @param users список існуючих користувачів
-     * @return новий унікальний ідентифікатор
-     */
-    private int generateId(List<User> users) {
-        if (users.isEmpty()) {
-            return 1;
+    } catch (SQLException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  /**
+   * Знаходить користувача за ідентифікатором.
+   *
+   * @param id ідентифікатор користувача
+   * @return користувач з вказаним ідентифікатором або null, якщо не знайдено
+   */
+  public User findById(int id) {
+    String sql = "SELECT id, name, email, hashedPassword FROM users WHERE id = ?";
+    try (Connection conn = DatabaseCfg.getConnection();
+        PreparedStatement ps = conn.prepareStatement(sql)) {
+
+      ps.setInt(1, id);
+      try (ResultSet rs = ps.executeQuery()) {
+        if (rs.next()) {
+          return extractUserFromResultSet(rs);
         }
-        int maxId = users.stream().mapToInt(User::getId).max().orElse(0);
-        return maxId + 1;
-    }
-}
+      }
+      return null;
 
+    } catch (SQLException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  /**
+   * Знаходить користувача за email адресою.
+   *
+   * @param email email адреса користувача
+   * @return користувач з вказаним email або null, якщо не знайдено
+   */
+  public User findByEmail(String email) {
+    String sql = "SELECT id, name, email, hashedPassword FROM users WHERE email = ?";
+    try (Connection conn = DatabaseCfg.getConnection();
+        PreparedStatement ps = conn.prepareStatement(sql)) {
+
+      ps.setString(1, email);
+      try (ResultSet rs = ps.executeQuery()) {
+        if (rs.next()) {
+          return extractUserFromResultSet(rs);
+        }
+      }
+      return null;
+
+    } catch (SQLException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  /**
+   * Отримує всіх користувачів з бази даних.
+   * (Цей метод був майже правильний, але використовує Statement, що нормально для запиту без параметрів)
+   */
+  public List<User> findAll() {
+    List<User> users = new ArrayList<>();
+    String sqlQuery = "SELECT id, name, email, hashedPassword FROM users";
+    try (Connection conn = DatabaseCfg.getConnection();
+        Statement stmt = conn.createStatement();
+        ResultSet rs = stmt.executeQuery(sqlQuery)) {
+
+      while (rs.next()) {
+        users.add(extractUserFromResultSet(rs));
+      }
+
+    } catch (SQLException e) {
+      throw new RuntimeException(e);
+    }
+
+    return users;
+  }
+
+  /**
+   * Оновлює дані користувача у базі даних.
+   *
+   * @param user користувач з оновленими даними
+   * @return true, якщо користувач успішно оновлений, false - інакше
+   */
+  public boolean update(User user) {
+    String sql = "UPDATE users SET name = ?, email = ?, hashedPassword = ? WHERE id = ?";
+    try (Connection conn = DatabaseCfg.getConnection();
+        PreparedStatement ps = conn.prepareStatement(sql)) {
+
+      ps.setString(1, user.getName());
+      ps.setString(2, user.getEmail());
+      ps.setString(3, user.getHashedPassword());
+      ps.setInt(4, user.getId());
+
+      return ps.executeUpdate() > 0;
+
+    } catch (SQLException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  /**
+   * Видаляє користувача за ідентифікатором.
+   *
+   * @param id ідентифікатор користувача для видалення
+   * @return true, якщо користувач успішно видалений, false - інакше
+   */
+  public boolean delete(int id) {
+    String sql = "DELETE FROM users WHERE id = ?";
+    try (Connection conn = DatabaseCfg.getConnection();
+        PreparedStatement ps = conn.prepareStatement(sql)) {
+
+      ps.setInt(1, id);
+
+      return ps.executeUpdate() > 0;
+    } catch (SQLException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+
+}

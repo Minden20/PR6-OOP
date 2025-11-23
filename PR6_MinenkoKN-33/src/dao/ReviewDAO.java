@@ -2,18 +2,23 @@ package dao;
 
 import entity.Review;
 import java.io.IOException;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
+import util.DatabaseCfg;
+import util.DatabaseInit;
 import util.JsonFileHandler;
-import util.SimpleJsonParser;
-import util.SimpleJsonParser.JsonObject;
 
 public class ReviewDAO {
     /**
      * Шлях до JSON файлу з даними відгуків.
      */
     private static final String FILE_PATH = "data/reviews.json";
-    
+
     /**
      * Об'єкт для роботи з JSON файлами.
      */
@@ -24,7 +29,7 @@ public class ReviewDAO {
      * Ініціалізує об'єкт для роботи з файлами.
      */
     public ReviewDAO() {
-        this.fileHandler = new JsonFileHandler();
+        DatabaseInit.InitR();
     }
 
     /**
@@ -102,49 +107,23 @@ public class ReviewDAO {
      */
     public List<Review> findAll() throws IOException {
         List<Review> reviews = new ArrayList<>();
-        
-        if (!fileHandler.fileExists(FILE_PATH)) {
-            return reviews;
-        }
+        String sqlQuery = "SELECT * FROM reviews";
+        try (Connection conn = DatabaseCfg.getConnection();
+                Statement ps = conn.createStatement();) {
+            ResultSet rs = ps.executeQuery(sqlQuery);
 
-        try {
-            String content = fileHandler.readFile(FILE_PATH);
-            List<JsonObject> jsonArray = SimpleJsonParser.parseArray(content);
-            
-            for (JsonObject jsonReview : jsonArray) {
-                Review review = new Review();
-                Object idObj = jsonReview.get("id");
-                if (idObj instanceof Long) {
-                    review.setId(((Long) idObj).intValue());
-                } else if (idObj instanceof Integer) {
-                    review.setId((Integer) idObj);
-                }
-                Object userIdObj = jsonReview.get("userId");
-                if (userIdObj instanceof Long) {
-                    review.setUserId(((Long) userIdObj).intValue());
-                } else if (userIdObj instanceof Integer) {
-                    review.setUserId((Integer) userIdObj);
-                }
-                Object serviceIdObj = jsonReview.get("serviceId");
-                if (serviceIdObj instanceof Long) {
-                    review.setServiceId(((Long) serviceIdObj).intValue());
-                } else if (serviceIdObj instanceof Integer) {
-                    review.setServiceId((Integer) serviceIdObj);
-                }
-                review.setText((String) jsonReview.get("text"));
-                Object ratingObj = jsonReview.get("rating");
-                if (ratingObj instanceof Long) {
-                    review.setRating(((Long) ratingObj).intValue());
-                } else if (ratingObj instanceof Integer) {
-                    review.setRating((Integer) ratingObj);
-                }
-                review.setCreatedAt((String) jsonReview.get("createdAt"));
+            while (rs.next()) {
+                Integer ID = rs.getInt("id");
+                Integer userID = rs.getInt("userID");
+                Integer serviceID = rs.getInt("serviceID");
+                String text = rs.getString("text");
+                Integer rating = rs.getInt("rating");
+                Review review = new Review(ID, userID, serviceID, text, rating);
                 reviews.add(review);
             }
-        } catch (Exception e) {
-            throw new IOException("Помилка парсингу JSON файлу", e);
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
         }
-        
         return reviews;
     }
 
@@ -183,27 +162,29 @@ public class ReviewDAO {
     }
 
     /**
-     * Зберігає список відгуків у JSON файл.
+     * Зберігає список відгуків у базу даних.
      * 
      * @param reviews список відгуків для збереження
      * @return true, якщо дані успішно збережені
      * @throws IOException якщо виникла помилка при записі файлу
      */
     private boolean saveAll(List<Review> reviews) throws IOException {
-        List<JsonObject> jsonArray = new ArrayList<>();
-        
-        for (Review review : reviews) {
-            JsonObject jsonReview = new JsonObject();
-            jsonReview.put("id", (long) review.getId());
-            jsonReview.put("userId", (long) review.getUserId());
-            jsonReview.put("serviceId", (long) review.getServiceId());
-            jsonReview.put("text", review.getText());
-            jsonReview.put("rating", (long) review.getRating());
-            jsonReview.put("createdAt", review.getCreatedAt());
-            jsonArray.add(jsonReview);
+        String sql = "INSERT INTO reviews (id, userID, serviceID, text, rating) VALUES (?, ?, ?, ?, ?)";
+        try (Connection conn = DatabaseCfg.getConnection();
+                PreparedStatement ps = conn.prepareStatement(sql);) {
+            conn.prepareStatement("DELETE FROM reviews").executeUpdate();
+            for (Review review : reviews) {
+                ps.setInt(1, review.getId());
+                ps.setInt(2, review.getUserId());
+                ps.setInt(3, review.getServiceId());
+                ps.setString(4, review.getText());
+                ps.setInt(5, review.getRating());
+                ps.addBatch();
+            }
+            ps.executeBatch();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
-        
-        fileHandler.writeFile(FILE_PATH, SimpleJsonParser.arrayToJsonString(jsonArray));
         return true;
     }
 
@@ -221,4 +202,3 @@ public class ReviewDAO {
         return maxId + 1;
     }
 }
-
