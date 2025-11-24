@@ -5,7 +5,7 @@ import java.sql.SQLException;
 
 public class DatabaseCfg {
 
-  private static final String URL = "jdbc:h2:./data/guestbook_db";
+  private static final String URL = "jdbc:h2:~/testdb";
   private static final String User = "sa";
   private static final String Password = "";
 

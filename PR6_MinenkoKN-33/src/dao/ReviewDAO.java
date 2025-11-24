@@ -1,7 +1,6 @@
 package dao;
 
 import entity.Review;
-import java.io.IOException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -11,194 +10,147 @@ import java.util.ArrayList;
 import java.util.List;
 import util.DatabaseCfg;
 import util.DatabaseInit;
-import util.JsonFileHandler;
 
 public class ReviewDAO {
-    /**
-     * Шлях до JSON файлу з даними відгуків.
-     */
-    private static final String FILE_PATH = "data/reviews.json";
 
-    /**
-     * Об'єкт для роботи з JSON файлами.
-     */
-    private JsonFileHandler fileHandler;
-
-    /**
-     * Конструктор.
-     * Ініціалізує об'єкт для роботи з файлами.
-     */
     public ReviewDAO() {
         DatabaseInit.InitR();
     }
 
-    /**
-     * Створює новий відгук та зберігає його у файл.
-     * 
-     * @param review відгук для створення
-     * @return true, якщо відгук успішно створений, false - інакше
-     * @throws IOException якщо виникла помилка при роботі з файлом
-     */
-    public boolean create(Review review) throws IOException {
-        List<Review> reviews = findAll();
-        review.setId(generateId(reviews));
-        reviews.add(review);
-        return saveAll(reviews);
+    private Review extractReviewFromResultSet(ResultSet rs) throws SQLException {
+        Integer ID = rs.getInt("id");
+        Integer userID = rs.getInt("userID");
+        Integer serviceID = rs.getInt("serviceID");
+        String text = rs.getString("text");
+        Integer rating = rs.getInt("rating");
+        return new Review(ID, userID, serviceID, text, rating);
     }
 
-    /**
-     * Знаходить відгук за ідентифікатором.
-     * 
-     * @param id ідентифікатор відгуку
-     * @return відгук з вказаним ідентифікатором або null, якщо не знайдено
-     * @throws IOException якщо виникла помилка при роботі з файлом
-     */
-    public Review findById(int id) throws IOException {
-        List<Review> reviews = findAll();
-        for (Review review : reviews) {
-            if (review.getId() == id) {
-                return review;
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Знаходить всі відгуки для конкретної послуги.
-     * 
-     * @param serviceId ідентифікатор послуги
-     * @return список відгуків для вказаної послуги
-     * @throws IOException якщо виникла помилка при роботі з файлом
-     */
-    public List<Review> findByServiceId(int serviceId) throws IOException {
-        List<Review> allReviews = findAll();
-        List<Review> serviceReviews = new ArrayList<>();
-        for (Review review : allReviews) {
-            if (review.getServiceId() == serviceId) {
-                serviceReviews.add(review);
-            }
-        }
-        return serviceReviews;
-    }
-
-    /**
-     * Знаходить всі відгуки конкретного користувача.
-     * 
-     * @param userId ідентифікатор користувача
-     * @return список відгуків вказаного користувача
-     * @throws IOException якщо виникла помилка при роботі з файлом
-     */
-    public List<Review> findByUserId(int userId) throws IOException {
-        List<Review> allReviews = findAll();
-        List<Review> userReviews = new ArrayList<>();
-        for (Review review : allReviews) {
-            if (review.getUserId() == userId) {
-                userReviews.add(review);
-            }
-        }
-        return userReviews;
-    }
-
-    /**
-     * Отримує всі відгуки з файлу.
-     * 
-     * @return список всіх відгуків
-     * @throws IOException якщо виникла помилка при роботі з файлом
-     */
-    public List<Review> findAll() throws IOException {
-        List<Review> reviews = new ArrayList<>();
-        String sqlQuery = "SELECT * FROM reviews";
+    public boolean create(Review review) {
+        String sql = "INSERT INTO reviews (userID, serviceID, text, rating) VALUES (?, ?, ?, ?)";
         try (Connection conn = DatabaseCfg.getConnection();
-                Statement ps = conn.createStatement();) {
-            ResultSet rs = ps.executeQuery(sqlQuery);
+             PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
 
-            while (rs.next()) {
-                Integer ID = rs.getInt("id");
-                Integer userID = rs.getInt("userID");
-                Integer serviceID = rs.getInt("serviceID");
-                String text = rs.getString("text");
-                Integer rating = rs.getInt("rating");
-                Review review = new Review(ID, userID, serviceID, text, rating);
-                reviews.add(review);
+            ps.setInt(1, review.getUserId());
+            ps.setInt(2, review.getServiceId());
+            ps.setString(3, review.getText());
+            ps.setInt(4, review.getRating());
+
+            int affectedRows = ps.executeUpdate();
+
+            if (affectedRows > 0) {
+                try (ResultSet rs = ps.getGeneratedKeys()) {
+                    if (rs.next()) {
+                        review.setId(rs.getInt(1));
+                    }
+                }
+                return true;
+            }
+            return false;
+
+        } catch (SQLException e) {
+            throw new RuntimeException("Помилка створення відгуку: " + e.getMessage(), e);
+        }
+    }
+
+    public Review findById(int id) {
+        String sql = "SELECT id, userID, serviceID, text, rating FROM reviews WHERE id = ?";
+        try (Connection conn = DatabaseCfg.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, id);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return extractReviewFromResultSet(rs);
+                }
+            }
+            return null;
+
+        } catch (SQLException e) {
+            throw new RuntimeException("Помилка пошуку відгуку за ID: " + e.getMessage(), e);
+        }
+    }
+
+    public List<Review> findByServiceId(int serviceId) {
+        List<Review> reviews = new ArrayList<>();
+        String sql = "SELECT id, userID, serviceID, text, rating FROM reviews WHERE serviceID = ?";
+        try (Connection conn = DatabaseCfg.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, serviceId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    reviews.add(extractReviewFromResultSet(rs));
+                }
             }
         } catch (SQLException e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException("Помилка пошуку відгуків за Service ID: " + e.getMessage(), e);
         }
         return reviews;
     }
 
-    /**
-     * Оновлює дані відгуку у файлі.
-     * 
-     * @param review відгук з оновленими даними
-     * @return true, якщо відгук успішно оновлений, false - інакше
-     * @throws IOException якщо виникла помилка при роботі з файлом
-     */
-    public boolean update(Review review) throws IOException {
-        List<Review> reviews = findAll();
-        for (int i = 0; i < reviews.size(); i++) {
-            if (reviews.get(i).getId() == review.getId()) {
-                reviews.set(i, review);
-                return saveAll(reviews);
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Видаляє відгук за ідентифікатором.
-     * 
-     * @param id ідентифікатор відгуку для видалення
-     * @return true, якщо відгук успішно видалений, false - інакше
-     * @throws IOException якщо виникла помилка при роботі з файлом
-     */
-    public boolean delete(int id) throws IOException {
-        List<Review> reviews = findAll();
-        boolean removed = reviews.removeIf(review -> review.getId() == id);
-        if (removed) {
-            return saveAll(reviews);
-        }
-        return false;
-    }
-
-    /**
-     * Зберігає список відгуків у базу даних.
-     * 
-     * @param reviews список відгуків для збереження
-     * @return true, якщо дані успішно збережені
-     * @throws IOException якщо виникла помилка при записі файлу
-     */
-    private boolean saveAll(List<Review> reviews) throws IOException {
-        String sql = "INSERT INTO reviews (id, userID, serviceID, text, rating) VALUES (?, ?, ?, ?, ?)";
+    public List<Review> findByUserId(int userId) {
+        List<Review> reviews = new ArrayList<>();
+        String sql = "SELECT id, userID, serviceID, text, rating FROM reviews WHERE userID = ?";
         try (Connection conn = DatabaseCfg.getConnection();
-                PreparedStatement ps = conn.prepareStatement(sql);) {
-            conn.prepareStatement("DELETE FROM reviews").executeUpdate();
-            for (Review review : reviews) {
-                ps.setInt(1, review.getId());
-                ps.setInt(2, review.getUserId());
-                ps.setInt(3, review.getServiceId());
-                ps.setString(4, review.getText());
-                ps.setInt(5, review.getRating());
-                ps.addBatch();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, userId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    reviews.add(extractReviewFromResultSet(rs));
+                }
             }
-            ps.executeBatch();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+        } catch (SQLException e) {
+            throw new RuntimeException("Помилка пошуку відгуків за User ID: " + e.getMessage(), e);
         }
-        return true;
+        return reviews;
     }
 
-    /**
-     * Генерує новий унікальний ідентифікатор для відгуку.
-     * 
-     * @param reviews список існуючих відгуків
-     * @return новий унікальний ідентифікатор
-     */
-    private int generateId(List<Review> reviews) {
-        if (reviews.isEmpty()) {
-            return 1;
+    public List<Review> findAll() {
+        List<Review> reviews = new ArrayList<>();
+        String sqlQuery = "SELECT id, userID, serviceID, text, rating FROM reviews";
+        try (Connection conn = DatabaseCfg.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sqlQuery)) {
+
+            while (rs.next()) {
+                reviews.add(extractReviewFromResultSet(rs));
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Помилка отримання всіх відгуків: " + e.getMessage(), e);
         }
-        int maxId = reviews.stream().mapToInt(Review::getId).max().orElse(0);
-        return maxId + 1;
+        return reviews;
+    }
+
+    public boolean update(Review review) {
+        String sql = "UPDATE reviews SET userID = ?, serviceID = ?, text = ?, rating = ? WHERE id = ?";
+        try (Connection conn = DatabaseCfg.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, review.getUserId());
+            ps.setInt(2, review.getServiceId());
+            ps.setString(3, review.getText());
+            ps.setInt(4, review.getRating());
+            ps.setInt(5, review.getId());
+
+            return ps.executeUpdate() > 0;
+
+        } catch (SQLException e) {
+            throw new RuntimeException("Помилка оновлення відгуку: " + e.getMessage(), e);
+        }
+    }
+
+    public boolean delete(int id) {
+        String sql = "DELETE FROM reviews WHERE id = ?";
+        try (Connection conn = DatabaseCfg.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, id);
+
+            return ps.executeUpdate() > 0;
+        } catch (SQLException e) {
+            throw new RuntimeException("Помилка видалення відгуку: " + e.getMessage(), e);
+        }
     }
 }

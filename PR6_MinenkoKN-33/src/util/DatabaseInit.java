@@ -35,7 +35,7 @@ public class DatabaseInit {
 
       st.execute("""
           CREATE TABLE IF NOT EXISTS users (
-              id INT PRIMARY KEY,
+              id INT PRIMARY KEY AUTO_INCREMENT,
               name VARCHAR(255),
               email VARCHAR(255),
               hashedPassword VARCHAR(255)
@@ -53,7 +53,7 @@ public class DatabaseInit {
 
       st.execute("""
           CREATE TABLE IF NOT EXISTS services (
-              id INT PRIMARY KEY,
+              id INT PRIMARY KEY AUTO_INCREMENT,
             name VARCHAR(255),
             description VARCHAR(255)
           );
@@ -70,7 +70,7 @@ public class DatabaseInit {
 
       st.execute("""
           CREATE TABLE IF NOT EXISTS reviews (
-              id INT PRIMARY KEY,
+              id INT PRIMARY KEY AUTO_INCREMENT,
               userID INT,
               serviceID INT,
               text VARCHAR(255),
