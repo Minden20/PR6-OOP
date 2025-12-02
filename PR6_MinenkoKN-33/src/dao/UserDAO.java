@@ -1,6 +1,7 @@
 package dao;
 
 import entity.User;
+import exception.EntityNotFoundException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -16,7 +17,7 @@ import util.DatabaseInit;
  */
 public class UserDAO {
 
-  // Видаляємо FILE_PATH та fileHandler, оскільки ми використовуємо DB
+  private static UserDAO instance;
 
   /**
    * Конструктор. Ініціалізує базу даних.
@@ -24,6 +25,13 @@ public class UserDAO {
   public UserDAO() {
     // Припускаємо, що цей метод створює таблицю, якщо вона не існує
     DatabaseInit.Init();
+  }
+
+  public static synchronized UserDAO getInstance() {
+    if (instance == null) {
+      instance = new UserDAO();
+    }
+    return instance;
   }
 
   // Helper метод для конвертації ResultSet у об'єкт User
@@ -84,7 +92,7 @@ public class UserDAO {
           return extractUserFromResultSet(rs);
         }
       }
-      return null;
+      throw new EntityNotFoundException("Користувача з ID " + id + " не знайдено.");
 
     } catch (SQLException e) {
       throw new RuntimeException(e);

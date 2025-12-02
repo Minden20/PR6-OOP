@@ -10,13 +10,21 @@ import java.util.ArrayList;
 import java.util.List;
 import util.DatabaseCfg;
 import util.DatabaseInit;
+import exception.EntityNotFoundException;
 
 public class ServiceDAO {
 
-  // Видалено FILE_PATH та fileHandler
+  private static ServiceDAO instance;
 
   public ServiceDAO() {
     DatabaseInit.InitS();
+  }
+
+  public static synchronized ServiceDAO getInstance() {
+    if (instance == null) {
+      instance = new ServiceDAO();
+    }
+    return instance;
   }
 
   // Приватний helper-метод для створення об'єкта Service з результату запиту
@@ -65,7 +73,7 @@ public class ServiceDAO {
           return extractServiceFromResultSet(rs);
         }
       }
-      return null;
+      throw new EntityNotFoundException("Послугу з ID " + id + " не знайдено.");
 
     } catch (SQLException e) {
       throw new RuntimeException("Помилка пошуку послуги за ID: " + e.getMessage(), e);

@@ -10,11 +10,21 @@ import java.util.ArrayList;
 import java.util.List;
 import util.DatabaseCfg;
 import util.DatabaseInit;
+import exception.EntityNotFoundException;
 
 public class ReviewDAO {
 
+    private static ReviewDAO instance;
+
     public ReviewDAO() {
         DatabaseInit.InitR();
+    }
+
+    public static synchronized ReviewDAO getInstance() {
+        if (instance == null) {
+            instance = new ReviewDAO();
+        }
+        return instance;
     }
 
     private Review extractReviewFromResultSet(ResultSet rs) throws SQLException {
@@ -64,7 +74,7 @@ public class ReviewDAO {
                     return extractReviewFromResultSet(rs);
                 }
             }
-            return null;
+            throw new EntityNotFoundException("Відгук з ID " + id + " не знайдено.");
 
         } catch (SQLException e) {
             throw new RuntimeException("Помилка пошуку відгуку за ID: " + e.getMessage(), e);

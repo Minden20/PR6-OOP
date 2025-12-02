@@ -1,8 +1,7 @@
 package service;
 
-import entity.User;
 import dao.UserDAO;
-
+import entity.User;
 import java.io.IOException;
 import java.util.List;
 import java.util.regex.Pattern;
