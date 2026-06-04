@@ -35,6 +35,11 @@ public class User {
     private String hashedPassword;
 
     /**
+     * Номер телефону користувача.
+     */
+    private String phone;
+
+    /**
      * Конструктор за замовчуванням.
      * Створює порожній об'єкт користувача.
      */
@@ -49,12 +54,14 @@ public class User {
      * @param name ім'я користувача
      * @param email email адреса користувача
      * @param password пароль користувача (буде захешований)
+     * @param phone номер телефону користувача
      */
-    public User(int id, String name, String email, String password) {
+    public User(int id, String name, String email, String password, String phone) {
         this.id = id;
         this.name = name;
         this.email = email;
         this.hashedPassword = hashPassword(password);
+        this.phone = phone;
     }
 
     /**
@@ -169,9 +176,27 @@ public class User {
         this.hashedPassword = hashPassword(password);
     }
 
+    /**
+     * Отримує номер телефону користувача.
+     * 
+     * @return номер телефону
+     */
+    public String getPhone() {
+        return phone;
+    }
+
+    /**
+     * Встановлює номер телефону користувача.
+     * 
+     * @param phone номер телефону
+     */
+    public void setPhone(String phone) {
+        this.phone = phone;
+    }
+
     @Override
     public String toString() {
-        return "User{id=" + id + ", name='" + name + "', email='" + email + "'}";
+        return "User{id=" + id + ", name='" + name + "', email='" + email + "', phone='" + phone + "'}";
     }
 }
 

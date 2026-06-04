@@ -1,15 +1,9 @@
 
-import dao.ReviewDAO;
-import dao.ServiceDAO;
-import dao.UserDAO;
-import dao.DaoFactory;
-import entity.Review;
-import entity.Service;
-import entity.User;
-import util.DatabaseInit;
 import presentation.GuestBookUI;
+import util.DatabaseInit;
 
 public class Main {
+
     public static void main(String[] args) {
         // Ініціалізація бази даних та вставка тестових даних
         DatabaseInit.Init();

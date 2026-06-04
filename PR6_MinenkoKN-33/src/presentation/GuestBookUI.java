@@ -6,6 +6,7 @@ import entity.Review;
 import service.UserService;
 import service.ServiceService;
 import service.ReviewService;
+import exception.ValidationException;
 
 import java.io.IOException;
 import java.util.List;
@@ -164,17 +165,26 @@ public class GuestBookUI {
         
         System.out.print("Введіть пароль: ");
         String password = scanner.nextLine();
-        
+
+        System.out.print("Введіть номер телефону (починаючи з +): ");
+        String phone = scanner.nextLine();
+
         try {
-            User user = userService.registerUser(name, email, password);
+            User user = userService.registerUser(name, email, password, phone);
             if (user != null) {
                 System.out.println("Реєстрація успішна! Ваш ID: " + user.getId());
                 currentUser = user;
             } else {
                 System.out.println("Помилка реєстрації.");
             }
-        } catch (IllegalArgumentException e) {
-            System.out.println("Помилка: " + e.getMessage());
+        } catch (ValidationException e) {
+            System.out.println("Помилка валідації! Будь ласка, виправте помилки:");
+            e.getValidationResult().getErrors().forEach((field, errors) -> {
+                System.out.println("Помилки у полі \"" + field + "\":");
+                for (String error : errors) {
+                    System.out.println("  - " + error);
+                }
+            });
         } catch (IOException e) {
             System.out.println("Помилка збереження даних: " + e.getMessage());
         }

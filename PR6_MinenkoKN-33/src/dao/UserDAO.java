@@ -23,7 +23,6 @@ public class UserDAO {
    * Конструктор. Ініціалізує базу даних.
    */
   public UserDAO() {
-    // Припускаємо, що цей метод створює таблицю, якщо вона не існує
     DatabaseInit.Init();
   }
 
@@ -36,11 +35,13 @@ public class UserDAO {
 
   // Helper метод для конвертації ResultSet у об'єкт User
   private User extractUserFromResultSet(ResultSet rs) throws SQLException {
-    Integer id = rs.getInt("id");
-    String name = rs.getString("name");
-    String email = rs.getString("email");
-    String hashedPassword = rs.getString("hashedPassword");
-    return new User(id, name, email, hashedPassword);
+    User user = new User();
+    user.setId(rs.getInt("id"));
+    user.setName(rs.getString("name"));
+    user.setEmail(rs.getString("email"));
+    user.setHashedPassword(rs.getString("hashedPassword"));
+    user.setPhone(rs.getString("phone"));
+    return user;
   }
 
   /**
@@ -50,13 +51,14 @@ public class UserDAO {
    * @return true, якщо користувач успішно створений, false - інакше
    */
   public boolean create(User user) {
-    String sql = "INSERT INTO users (name, email, hashedPassword) VALUES (?, ?, ?)";
+    String sql = "INSERT INTO users (name, email, hashedPassword, phone) VALUES (?, ?, ?, ?)";
     try (Connection conn = DatabaseCfg.getConnection();
         PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
 
       ps.setString(1, user.getName());
       ps.setString(2, user.getEmail());
       ps.setString(3, user.getHashedPassword());
+      ps.setString(4, user.getPhone());
 
       int affectedRows = ps.executeUpdate();
 
@@ -82,7 +84,7 @@ public class UserDAO {
    * @return користувач з вказаним ідентифікатором або null, якщо не знайдено
    */
   public User findById(int id) {
-    String sql = "SELECT id, name, email, hashedPassword FROM users WHERE id = ?";
+    String sql = "SELECT id, name, email, hashedPassword, phone FROM users WHERE id = ?";
     try (Connection conn = DatabaseCfg.getConnection();
         PreparedStatement ps = conn.prepareStatement(sql)) {
 
@@ -106,7 +108,7 @@ public class UserDAO {
    * @return користувач з вказаним email або null, якщо не знайдено
    */
   public User findByEmail(String email) {
-    String sql = "SELECT id, name, email, hashedPassword FROM users WHERE email = ?";
+    String sql = "SELECT id, name, email, hashedPassword, phone FROM users WHERE email = ?";
     try (Connection conn = DatabaseCfg.getConnection();
         PreparedStatement ps = conn.prepareStatement(sql)) {
 
@@ -125,11 +127,10 @@ public class UserDAO {
 
   /**
    * Отримує всіх користувачів з бази даних.
-   * (Цей метод був майже правильний, але використовує Statement, що нормально для запиту без параметрів)
    */
   public List<User> findAll() {
     List<User> users = new ArrayList<>();
-    String sqlQuery = "SELECT id, name, email, hashedPassword FROM users";
+    String sqlQuery = "SELECT id, name, email, hashedPassword, phone FROM users";
     try (Connection conn = DatabaseCfg.getConnection();
         Statement stmt = conn.createStatement();
         ResultSet rs = stmt.executeQuery(sqlQuery)) {
@@ -152,14 +153,15 @@ public class UserDAO {
    * @return true, якщо користувач успішно оновлений, false - інакше
    */
   public boolean update(User user) {
-    String sql = "UPDATE users SET name = ?, email = ?, hashedPassword = ? WHERE id = ?";
+    String sql = "UPDATE users SET name = ?, email = ?, hashedPassword = ?, phone = ? WHERE id = ?";
     try (Connection conn = DatabaseCfg.getConnection();
         PreparedStatement ps = conn.prepareStatement(sql)) {
 
       ps.setString(1, user.getName());
       ps.setString(2, user.getEmail());
       ps.setString(3, user.getHashedPassword());
-      ps.setInt(4, user.getId());
+      ps.setString(4, user.getPhone());
+      ps.setInt(5, user.getId());
 
       return ps.executeUpdate() > 0;
 
@@ -186,6 +188,4 @@ public class UserDAO {
       throw new RuntimeException(e);
     }
   }
-
-
 }
